@@ -2,7 +2,7 @@
 #include <math.h>
 #include <stdio.h>
 
-#define GRID_X_TILES 5
+#define GRID_X_TILES 6
 #define GRID_Y_TILES 10
 
 #define TILE_SIZE 72
@@ -52,7 +52,16 @@ typedef struct Player {
   PlayerRotation rotation;
 } Player;
 
+typedef struct SoundEffects {
+  Sound moveSuccess;
+  Sound moveFailure;
+  Sound wordFound;
+} SoundEffects;
+
+
+
 GameState _state;
+SoundEffects _sfx;
 Grid _grid;
 Player _player;
 Font _font;
@@ -67,6 +76,12 @@ void InitGrid() {
 void InitGame() {
   _state = PLAYING;
   InitGrid();
+}
+
+void InitSounds() {
+  _sfx.moveSuccess = LoadSound("resources/move.wav");
+  _sfx.moveFailure = LoadSound("resources/stuck.wav");
+  _sfx.wordFound = LoadSound("resources/correct.wav");
 }
 
 void DrawGameBoard() {
@@ -96,6 +111,10 @@ void DrawGameBoard() {
 }
 
 void SpawnPiece() {
+  if (_player.tiles[0] && _player.tiles[1]) {
+    _player.tiles[0]->state = STATIC;
+    _player.tiles[1]->state = STATIC;
+  }
   int leftIndex = (GRID_X_TILES / 2) - 1;
   int rightIndex = (GRID_X_TILES / 2);
   if (_grid.tiles[leftIndex].state == EMPTY &&
@@ -109,6 +128,7 @@ void SpawnPiece() {
     _player.indexes[1] = rightIndex;
     _player.rotation = NONE;
 
+    Color colors[] = {GRAY, YELLOW, GREEN, ORANGE, RED, PINK};
     _player.tiles[0]->letter = _letters[GetRandomValue(0, 73)];
     do {
       _player.tiles[1]->letter = _letters[GetRandomValue(0, 73)];
@@ -211,26 +231,8 @@ void RotatePlayer(int spin) {
   SetPlayer(index1, index2);
 }
 
-double _time;
-
 void DrawFrame() {
   BeginDrawing();
-
-  if (IsKeyPressed(KEY_A)) {
-    // MovePlayer(-1, 0);
-    MovePlayer(-1, 0);
-  } else if (IsKeyPressed(KEY_D)) {
-    MovePlayer(1, 0);
-    // MovePlayer(1, 0);
-  } else if (IsKeyPressed(KEY_S)) {
-    _time = MovePlayer(0, 1) ? GetTime() : _time;
-  } else if (IsKeyPressed(KEY_W)) {
-    MovePlayer(0, -1);
-  }
-
-  if (IsKeyPressed(KEY_R)) {
-    RotatePlayer(-1);
-  }
 
   ClearBackground(RAYWHITE);
   DrawGameBoard();
@@ -238,10 +240,13 @@ void DrawFrame() {
   EndDrawing();
 }
 
+
 int main() {
   InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Wordtris");
   // SetConfigFlags(FLAG_MSAA_4X_HINT);      // Enable Multi Sampling Anti
   // Aliasing 4x (if available)
+  InitAudioDevice();
+  InitSounds();
   SetTargetFPS(60);
   InitGame();
   _font = LoadFontEx("./Arialbd.TTF", LETTER_SIZE, 0, 0);
@@ -249,19 +254,43 @@ int main() {
   // SetTextureFilter(_font.texture, TEXTURE_FILTER_POINT);
   SpawnPiece();
 
+
   double tick_time = 1.0;
-  _time = GetTime();
+  double time = GetTime();
   while (!WindowShouldClose()) {
     // in-game tick
-    if (GetTime() >= _time + tick_time) {
-      _time = GetTime();
+    if (GetTime() >= time + tick_time) {
+      time = GetTime();
       if (!MovePlayer(0, 1)) {
-        _player.tiles[0]->state = STATIC;
-        _player.tiles[1]->state = STATIC;
+        PlaySound(_sfx.moveFailure);
         SpawnPiece();
       }
     }
 
+    if (IsKeyPressed(KEY_A)) {
+      if (MovePlayer(-1, 0)) {
+        PlaySound(_sfx.moveSuccess);
+      } else {
+        PlaySound(_sfx.moveFailure);
+      };
+    } else if (IsKeyPressed(KEY_D)) {
+      if (MovePlayer(1, 0)) {
+        PlaySound(_sfx.moveSuccess);
+      } else {
+        PlaySound(_sfx.moveFailure);
+      };
+    } else if (IsKeyPressed(KEY_S)) {
+      if (MovePlayer(0, 1)) {
+        time = GetTime();
+        PlaySound(_sfx.moveSuccess);
+      }
+    } else if (IsKeyPressed(KEY_R)) {
+      RotatePlayer(-1);
+    }
+
+    if (_state == GAMEOVER) {
+      break;
+    }
     DrawFrame();
   }
 
