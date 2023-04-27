@@ -2,41 +2,21 @@
 #include <math.h>
 #include <stdio.h>
 
-#define GRID_X_TILES 6
+#define GRID_X_TILES 5
 #define GRID_Y_TILES 10
 
 #define TILE_SIZE 72
 #define LETTER_SIZE TILE_SIZE
 
-#define SCREEN_WIDTH GRID_X_TILES *TILE_SIZE
-#define SCREEN_HEIGHT GRID_Y_TILES *TILE_SIZE
+#define SCREEN_WIDTH GRID_X_TILES * TILE_SIZE + (4 * TILE_SIZE)
+#define SCREEN_HEIGHT GRID_Y_TILES * TILE_SIZE
 
 char _letters[] = {
-  'A', 'A', 'A', 'A', 'A',
-  'B', 'B',
-  'C', 'C', 'C',
-  'D', 'D', 'D', 'D',
-  'E', 'E', 'E', 'E', 'E',
-  'F', 'F', 'F',
-  'G', 'G', 
-  'H', 'H', 
-  'I', 'I', 'I', 'I', 'I',
-  'J',
-  'K', 'K',
-  'L', 'L', 'L', 'L',
-  'M', 'M', 'M',
-  'O', 'O', 'O', 'O', 'O',
-  'P', 'P', 'P',
-  'Q',
-  'R', 'R', 'R',
-  'S', 'S', 'S',
-  'T', 'T', 'T', 'T',
-  'U', 'U', 'U', 'U', 'U',
-  'V', 'V',
-  'W', 'W',
-  'X',
-  'Y', 'Y',
-  'Z',
+    'A', 'A', 'A', 'A', 'A', 'B', 'B', 'C', 'C', 'C', 'D', 'D', 'D', 'D', 'E',
+    'E', 'E', 'E', 'E', 'F', 'F', 'F', 'G', 'G', 'H', 'H', 'I', 'I', 'I', 'I',
+    'I', 'J', 'K', 'K', 'L', 'L', 'L', 'L', 'M', 'M', 'M', 'O', 'O', 'O', 'O',
+    'O', 'P', 'P', 'P', 'Q', 'R', 'R', 'R', 'S', 'S', 'S', 'T', 'T', 'T', 'T',
+    'U', 'U', 'U', 'U', 'U', 'V', 'V', 'W', 'W', 'X', 'Y', 'Y', 'Z',
 };
 
 typedef enum TileState {
@@ -104,9 +84,11 @@ void DrawGameBoard() {
                       BLACK);
         DrawRectangle(x * TILE_SIZE + 1, y * TILE_SIZE + 1, TILE_SIZE - 2,
                       TILE_SIZE - 2, LIGHTGRAY);
-        Vector2 letterSize = MeasureTextEx(_font, &_grid.tiles[index].letter, LETTER_SIZE, 0);
+        Vector2 letterSize =
+            MeasureTextEx(_font, &_grid.tiles[index].letter, LETTER_SIZE, 0);
         DrawTextEx(_font, &_grid.tiles[index].letter,
-                   (Vector2){x * TILE_SIZE + ((TILE_SIZE - letterSize.x) / 2), y * TILE_SIZE + ((TILE_SIZE - letterSize.y) / 2)},
+                   (Vector2){x * TILE_SIZE + ((TILE_SIZE - letterSize.x) / 2),
+                             y * TILE_SIZE + ((TILE_SIZE - letterSize.y) / 2)},
                    TILE_SIZE, 0, BLACK);
       }
     }
@@ -136,31 +118,23 @@ void SpawnPiece() {
   }
 }
 
-bool CheckCollision(int index) {
-  bool movingRight =
-      (_player.indexes[0] < index || _player.indexes[1] < index) &&
-      (index != _player.indexes[0] + GRID_X_TILES &&
-       index != _player.indexes[1] + GRID_X_TILES);
-  bool movingDown =
-      !movingRight && (index == _player.indexes[0] + GRID_X_TILES ||
-                       index == _player.indexes[1] + GRID_X_TILES);
-  bool movingLeft =
-      !movingDown && (index < _player.indexes[0] || index < _player.indexes[0]);
+bool CheckCollision(int index, int tileIndex) {
+
+  bool movingDown = (index == tileIndex + GRID_X_TILES);
+  bool movingRight = !movingDown && (index > tileIndex);
+  bool movingLeft = !movingRight && (index < tileIndex);
 
   bool collided = false;
+
   if (movingRight) {
-    collided = index % GRID_X_TILES == 0 || _grid.tiles[index].state == STATIC;
+    collided = index % GRID_X_TILES == 0;
   } else if (movingDown) {
-    collided = index > ((GRID_X_TILES * GRID_Y_TILES)) - 1 ||
-               _grid.tiles[index].state == STATIC;
-    printf("%u\n", _grid.tiles[index].state);
+    collided = index > (GRID_X_TILES * GRID_Y_TILES) - 1;
   } else if (movingLeft) {
-    collided =
-        (index + 1) % GRID_X_TILES == 0 || _grid.tiles[index].state == STATIC;
+    collided = (index + 1) % GRID_X_TILES == 0;
   }
 
-  return ((!collided &&
-           (index != _player.indexes[0] || index != _player.indexes[1])));
+  return !collided && _grid.tiles[index].state != STATIC;
 }
 
 void UnsetTile(Tile *t) {
@@ -182,10 +156,10 @@ void SetPlayer(int idx1, int idx2) {
 }
 
 bool MovePlayer(int dirX, int dirY) {
-  if (CheckCollision(_player.indexes[0] + dirX + (dirY * GRID_X_TILES)) &&
-      CheckCollision(_player.indexes[1] + dirX + (dirY * GRID_X_TILES))) {
-
-    printf("%d %d\n", _player.indexes[0], _player.indexes[1]);
+  if (CheckCollision(_player.indexes[0] + dirX + (dirY * GRID_X_TILES),
+                     _player.indexes[0]) &&
+      CheckCollision(_player.indexes[1] + dirX + (dirY * GRID_X_TILES),
+                     _player.indexes[1])) {
 
     SetPlayer(_player.indexes[0] + dirX + (dirY * GRID_X_TILES),
               _player.indexes[1] + dirX + (dirY * GRID_X_TILES));
@@ -200,29 +174,33 @@ void RotatePlayer(int spin) {
   int index2 = _player.indexes[1];
   if (spin == -1) {
     if (_player.rotation == NONE) {
-      if (CheckCollision(_player.indexes[0] - GRID_X_TILES) &&
-          CheckCollision(_player.indexes[1] - 1)) {
+      if (CheckCollision(_player.indexes[0] - GRID_X_TILES,
+                         _player.indexes[0]) &&
+          CheckCollision(_player.indexes[1] - 1, _player.indexes[1])) {
         index1 += -GRID_X_TILES;
         index2 += -1;
         _player.rotation = QUARTER;
       }
     } else if (_player.rotation == QUARTER) {
-      if (CheckCollision(_player.indexes[0] - GRID_X_TILES) &&
-          CheckCollision(_player.indexes[1] + 1)) {
+      if (CheckCollision(_player.indexes[0] + 1, _player.indexes[0]) &&
+          CheckCollision(_player.indexes[1] - GRID_X_TILES,
+                         _player.indexes[1])) {
         index1 += 1;
         index2 += -GRID_X_TILES;
         _player.rotation = HALF;
       }
     } else if (_player.rotation == HALF) {
-      if (CheckCollision(_player.indexes[0] + GRID_X_TILES) &&
-          CheckCollision(_player.indexes[1] + 1)) {
+      if (CheckCollision(_player.indexes[0] + GRID_X_TILES,
+                         _player.indexes[0]) &&
+          CheckCollision(_player.indexes[1] + 1, _player.indexes[1])) {
         index1 += GRID_X_TILES;
         index2 += 1;
         _player.rotation = THREE_QUARTER;
       }
     } else {
-      if (CheckCollision(_player.indexes[0] + GRID_X_TILES) &&
-          CheckCollision(_player.indexes[1] - 1)) {
+      if (CheckCollision(_player.indexes[0] - 1, _player.indexes[0]) &&
+          CheckCollision(_player.indexes[1] - GRID_X_TILES,
+                         _player.indexes[1])) {
         index1 += -1;
         index2 += GRID_X_TILES;
         _player.rotation = NONE;
@@ -239,9 +217,11 @@ void DrawFrame() {
   BeginDrawing();
 
   if (IsKeyPressed(KEY_A)) {
+    // MovePlayer(-1, 0);
     MovePlayer(-1, 0);
   } else if (IsKeyPressed(KEY_D)) {
     MovePlayer(1, 0);
+    // MovePlayer(1, 0);
   } else if (IsKeyPressed(KEY_S)) {
     _time = MovePlayer(0, 1) ? GetTime() : _time;
   } else if (IsKeyPressed(KEY_W)) {
@@ -260,7 +240,8 @@ void DrawFrame() {
 
 int main() {
   InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Wordtris");
-  // SetConfigFlags(FLAG_MSAA_4X_HINT);      // Enable Multi Sampling Anti Aliasing 4x (if available)
+  // SetConfigFlags(FLAG_MSAA_4X_HINT);      // Enable Multi Sampling Anti
+  // Aliasing 4x (if available)
   SetTargetFPS(60);
   InitGame();
   _font = LoadFontEx("./Arialbd.TTF", LETTER_SIZE, 0, 0);
@@ -271,9 +252,8 @@ int main() {
   double tick_time = 1.0;
   _time = GetTime();
   while (!WindowShouldClose()) {
-  //in-game tick
-    if (GetTime() >= _time + tick_time)
-    {
+    // in-game tick
+    if (GetTime() >= _time + tick_time) {
       _time = GetTime();
       if (!MovePlayer(0, 1)) {
         _player.tiles[0]->state = STATIC;
