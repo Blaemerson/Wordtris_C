@@ -8,15 +8,15 @@
 #define TILE_SIZE 72
 #define LETTER_SIZE TILE_SIZE
 
-#define SCREEN_WIDTH GRID_X_TILES * TILE_SIZE + (4 * TILE_SIZE)
-#define SCREEN_HEIGHT GRID_Y_TILES * TILE_SIZE
+#define SCREEN_WIDTH GRID_X_TILES *TILE_SIZE + (4 * TILE_SIZE)
+#define SCREEN_HEIGHT GRID_Y_TILES *TILE_SIZE
 
 char _letters[] = {
-    'A', 'A', 'A', 'A', 'A', 'B', 'B', 'C', 'C', 'C', 'D', 'D', 'D', 'D', 'E',
-    'E', 'E', 'E', 'E', 'F', 'F', 'F', 'G', 'G', 'H', 'H', 'I', 'I', 'I', 'I',
-    'I', 'J', 'K', 'K', 'L', 'L', 'L', 'L', 'M', 'M', 'M', 'O', 'O', 'O', 'O',
-    'O', 'P', 'P', 'P', 'Q', 'R', 'R', 'R', 'S', 'S', 'S', 'T', 'T', 'T', 'T',
-    'U', 'U', 'U', 'U', 'U', 'V', 'V', 'W', 'W', 'X', 'Y', 'Y', 'Z',
+    'A', 'A', 'A', 'A', 'A', 'A', 'B', 'B', 'C', 'C', 'C', 'D', 'D', 'D', 'D',
+    'E', 'E', 'E', 'E', 'E', 'E', 'F', 'F', 'F', 'G', 'G', 'H', 'H', 'I', 'I',
+    'I', 'I', 'I', 'J', 'K', 'K', 'L', 'L', 'L', 'L', 'M', 'M', 'M', 'O', 'O',
+    'O', 'O', 'O', 'P', 'P', 'P', 'Q', 'R', 'R', 'R', 'S', 'S', 'S', 'T', 'T',
+    'T', 'T', 'U', 'U', 'U', 'U', 'U', 'V', 'V', 'W', 'W', 'X', 'Y', 'Y', 'Z',
 };
 
 typedef enum TileState {
@@ -58,8 +58,6 @@ typedef struct SoundEffects {
   Sound wordFound;
 } SoundEffects;
 
-
-
 GameState _state;
 SoundEffects _sfx;
 Grid _grid;
@@ -73,15 +71,16 @@ void InitGrid() {
   }
 }
 
-void InitGame() {
-  _state = PLAYING;
-  InitGrid();
-}
-
 void InitSounds() {
   _sfx.moveSuccess = LoadSound("resources/move.wav");
   _sfx.moveFailure = LoadSound("resources/stuck.wav");
   _sfx.wordFound = LoadSound("resources/correct.wav");
+}
+
+void InitGame() {
+  _state = PLAYING;
+  InitGrid();
+  InitSounds();
 }
 
 void DrawGameBoard() {
@@ -128,10 +127,9 @@ void SpawnPiece() {
     _player.indexes[1] = rightIndex;
     _player.rotation = NONE;
 
-    Color colors[] = {GRAY, YELLOW, GREEN, ORANGE, RED, PINK};
-    _player.tiles[0]->letter = _letters[GetRandomValue(0, 73)];
+    _player.tiles[0]->letter = _letters[GetRandomValue(0, 74)];
     do {
-      _player.tiles[1]->letter = _letters[GetRandomValue(0, 73)];
+      _player.tiles[1]->letter = _letters[GetRandomValue(0, 74)];
     } while (_player.tiles[0]->letter == _player.tiles[1]->letter);
   } else {
     _state = GAMEOVER;
@@ -147,14 +145,14 @@ bool CheckCollision(int index, int tileIndex) {
   bool collided = false;
 
   if (movingRight) {
-    collided = index % GRID_X_TILES == 0;
+    collided = (tileIndex % GRID_X_TILES) == GRID_X_TILES - 1;
   } else if (movingDown) {
     collided = index > (GRID_X_TILES * GRID_Y_TILES) - 1;
   } else if (movingLeft) {
-    collided = (index + 1) % GRID_X_TILES == 0;
+    collided = (tileIndex % GRID_X_TILES) == 0;
   }
 
-  return !collided && _grid.tiles[index].state != STATIC;
+  return (!collided && _grid.tiles[index].state != STATIC);
 }
 
 void UnsetTile(Tile *t) {
@@ -226,8 +224,41 @@ void RotatePlayer(int spin) {
         _player.rotation = NONE;
       }
     }
+  } else {
+    if (_player.rotation == NONE) {
+      if (CheckCollision(_player.indexes[0] + 1, _player.indexes[0]) &&
+          CheckCollision(_player.indexes[1] - GRID_X_TILES,
+                         _player.indexes[1])) {
+        index1 += 1;
+        index2 += -GRID_X_TILES;
+        _player.rotation = THREE_QUARTER;
+      }
+    } else if (_player.rotation == THREE_QUARTER) {
+      if (CheckCollision(_player.indexes[0] - GRID_X_TILES,
+                         _player.indexes[0]) &&
+          CheckCollision(_player.indexes[1] - 1, _player.indexes[1])) {
+        index1 += -GRID_X_TILES;
+        index2 += -1;
+        _player.rotation = HALF;
+      }
+    } else if (_player.rotation == HALF) {
+      if (CheckCollision(_player.indexes[0] - 1, _player.indexes[0]) &&
+          CheckCollision(_player.indexes[1] + GRID_X_TILES,
+                         _player.indexes[1])) {
+        index1 += -1;
+        index2 += GRID_X_TILES;
+        _player.rotation = QUARTER;
+      }
+    } else {
+      if (CheckCollision(_player.indexes[0] + GRID_X_TILES,
+                         _player.indexes[0]) &&
+          CheckCollision(_player.indexes[1] + 1, _player.indexes[1])) {
+        index1 += GRID_X_TILES;
+        index2 += 1;
+        _player.rotation = NONE;
+      }
+    }
   }
-
   SetPlayer(index1, index2);
 }
 
@@ -240,20 +271,13 @@ void DrawFrame() {
   EndDrawing();
 }
 
-
 int main() {
   InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Wordtris");
-  // SetConfigFlags(FLAG_MSAA_4X_HINT);      // Enable Multi Sampling Anti
-  // Aliasing 4x (if available)
   InitAudioDevice();
-  InitSounds();
   SetTargetFPS(60);
   InitGame();
   _font = LoadFontEx("./Arialbd.TTF", LETTER_SIZE, 0, 0);
-  // GenTextureMipmaps(&_font.texture);
-  // SetTextureFilter(_font.texture, TEXTURE_FILTER_POINT);
   SpawnPiece();
-
 
   double tick_time = 1.0;
   double time = GetTime();
@@ -267,26 +291,30 @@ int main() {
       }
     }
 
-    if (IsKeyPressed(KEY_A)) {
-      if (MovePlayer(-1, 0)) {
-        PlaySound(_sfx.moveSuccess);
-      } else {
-        PlaySound(_sfx.moveFailure);
-      };
-    } else if (IsKeyPressed(KEY_D)) {
-      if (MovePlayer(1, 0)) {
-        PlaySound(_sfx.moveSuccess);
-      } else {
-        PlaySound(_sfx.moveFailure);
-      };
-    } else if (IsKeyPressed(KEY_S)) {
+    switch (GetKeyPressed()) {
+    case (KEY_A):
+      MovePlayer(-1, 0) ? PlaySound(_sfx.moveSuccess)
+                        : PlaySound(_sfx.moveFailure);
+      break;
+    case (KEY_D):
+      MovePlayer(1, 0) ? PlaySound(_sfx.moveSuccess)
+                       : PlaySound(_sfx.moveFailure);
+      break;
+    case (KEY_S):
       if (MovePlayer(0, 1)) {
         time = GetTime();
         PlaySound(_sfx.moveSuccess);
+      } else {
+        time = tick_time;
       }
-    } else if (IsKeyPressed(KEY_R)) {
+      break;
+    case (KEY_K):
       RotatePlayer(-1);
-    }
+      break;
+    case (KEY_J):
+      RotatePlayer(1);
+      break;
+    };
 
     if (_state == GAMEOVER) {
       break;
