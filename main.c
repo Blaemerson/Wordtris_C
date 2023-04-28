@@ -39,11 +39,16 @@ typedef enum GameState {
   PLAYING,
 } GameState;
 
+typedef enum Spin {
+  C_CLOCKWISE,
+  CLOCKWISE,
+} Spin;
+
 typedef enum PlayerRotation {
-  NONE,
-  QUARTER,
-  HALF,
-  THREE_QUARTER,
+  NONE = 0,
+  QUARTER = 1,
+  HALF = 2,
+  THREE_QUARTER = 3,
 } PlayerRotation;
 
 typedef struct Player {
@@ -187,79 +192,40 @@ bool MovePlayer(int dirX, int dirY) {
   return false;
 }
 
-void RotatePlayer(int spin) {
+bool RotatePlayer(Spin spin) {
   int index1 = _player.indexes[0];
   int index2 = _player.indexes[1];
-  if (spin == -1) {
-    if (_player.rotation == NONE) {
-      if (CheckCollision(_player.indexes[0] - GRID_X_TILES,
-                         _player.indexes[0]) &&
-          CheckCollision(_player.indexes[1] - 1, _player.indexes[1])) {
-        index1 += -GRID_X_TILES;
-        index2 += -1;
-        _player.rotation = QUARTER;
-      }
-    } else if (_player.rotation == QUARTER) {
-      if (CheckCollision(_player.indexes[0] + 1, _player.indexes[0]) &&
-          CheckCollision(_player.indexes[1] - GRID_X_TILES,
-                         _player.indexes[1])) {
-        index1 += 1;
-        index2 += -GRID_X_TILES;
-        _player.rotation = HALF;
-      }
-    } else if (_player.rotation == HALF) {
-      if (CheckCollision(_player.indexes[0] + GRID_X_TILES,
-                         _player.indexes[0]) &&
-          CheckCollision(_player.indexes[1] + 1, _player.indexes[1])) {
-        index1 += GRID_X_TILES;
-        index2 += 1;
-        _player.rotation = THREE_QUARTER;
-      }
-    } else {
-      if (CheckCollision(_player.indexes[0] - 1, _player.indexes[0]) &&
-          CheckCollision(_player.indexes[1] - GRID_X_TILES,
-                         _player.indexes[1])) {
-        index1 += -1;
-        index2 += GRID_X_TILES;
-        _player.rotation = NONE;
-      }
-    }
-  } else {
-    if (_player.rotation == NONE) {
-      if (CheckCollision(_player.indexes[0] + 1, _player.indexes[0]) &&
-          CheckCollision(_player.indexes[1] - GRID_X_TILES,
-                         _player.indexes[1])) {
-        index1 += 1;
-        index2 += -GRID_X_TILES;
-        _player.rotation = THREE_QUARTER;
-      }
-    } else if (_player.rotation == THREE_QUARTER) {
-      if (CheckCollision(_player.indexes[0] - GRID_X_TILES,
-                         _player.indexes[0]) &&
-          CheckCollision(_player.indexes[1] - 1, _player.indexes[1])) {
-        index1 += -GRID_X_TILES;
-        index2 += -1;
-        _player.rotation = HALF;
-      }
-    } else if (_player.rotation == HALF) {
-      if (CheckCollision(_player.indexes[0] - 1, _player.indexes[0]) &&
-          CheckCollision(_player.indexes[1] + GRID_X_TILES,
-                         _player.indexes[1])) {
-        index1 += -1;
-        index2 += GRID_X_TILES;
-        _player.rotation = QUARTER;
-      }
-    } else {
-      if (CheckCollision(_player.indexes[0] + GRID_X_TILES,
-                         _player.indexes[0]) &&
-          CheckCollision(_player.indexes[1] + 1, _player.indexes[1])) {
-        index1 += GRID_X_TILES;
-        index2 += 1;
-        _player.rotation = NONE;
-      }
-    }
+  PlayerRotation rotation = _player.rotation;
+
+  if ((_player.rotation == NONE && spin == C_CLOCKWISE) ||
+      (_player.rotation == THREE_QUARTER && spin == CLOCKWISE)) {
+    index1 += -GRID_X_TILES;
+    index2 += -1;
+    rotation = spin == C_CLOCKWISE ? QUARTER : HALF;
+  } else if ((_player.rotation == QUARTER && spin == C_CLOCKWISE) ||
+             (_player.rotation == NONE && spin == CLOCKWISE)) {
+    index1 += 1;
+    index2 += -GRID_X_TILES;
+    rotation = spin == C_CLOCKWISE ? HALF : THREE_QUARTER;
+  } else if ((_player.rotation == HALF && spin == C_CLOCKWISE) ||
+             (_player.rotation == QUARTER && spin == CLOCKWISE)) {
+    index1 += GRID_X_TILES;
+    index2 += 1;
+    rotation = spin == C_CLOCKWISE ? THREE_QUARTER : NONE;
+  } else if ((_player.rotation == THREE_QUARTER && spin == C_CLOCKWISE) ||
+             (_player.rotation == HALF && spin == CLOCKWISE)) {
+    index1 += -1;
+    index2 += GRID_X_TILES;
+    rotation = spin == C_CLOCKWISE ? NONE : QUARTER;
   }
-  SetPlayer(index1, index2);
+
+  if (CheckCollision(index1, index2)) {
+    _player.rotation = rotation;
+    SetPlayer(index1, index2);
+    return true;
+  }
+
+  return false;
 }
 
 void DrawFrame() {
@@ -309,10 +275,10 @@ int main() {
       }
       break;
     case (KEY_K):
-      RotatePlayer(-1);
+      RotatePlayer(C_CLOCKWISE);
       break;
     case (KEY_J):
-      RotatePlayer(1);
+      RotatePlayer(CLOCKWISE);
       break;
     };
 
