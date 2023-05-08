@@ -1,6 +1,7 @@
 #include "raylib.h"
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #define GRID_X_TILES 6
 #define GRID_Y_TILES 10
@@ -89,27 +90,25 @@ void InitGame() {
 }
 
 void DrawGameBoard() {
-  int row = 0;
   for (int y = 0; y < GRID_Y_TILES; y++) {
     for (int x = 0; x < GRID_X_TILES; x++) {
-      int index = y * GRID_X_TILES + x;
-      if (_grid.tiles[index].state == EMPTY) {
+      int i = y * GRID_X_TILES + x;
+      if (_grid.tiles[i].state == EMPTY) {
         DrawRectangle(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE, GRAY);
         DrawRectangle(x * TILE_SIZE + 1, y * TILE_SIZE + 1, TILE_SIZE - 2,
                       TILE_SIZE - 2, WHITE);
         continue;
-      } else {
-        DrawRectangle(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE,
-                      BLACK);
-        DrawRectangle(x * TILE_SIZE + 1, y * TILE_SIZE + 1, TILE_SIZE - 2,
-                      TILE_SIZE - 2, LIGHTGRAY);
-        Vector2 letterSize =
-            MeasureTextEx(_font, &_grid.tiles[index].letter, LETTER_SIZE, 0);
-        DrawTextEx(_font, &_grid.tiles[index].letter,
-                   (Vector2){x * TILE_SIZE + ((TILE_SIZE - letterSize.x) / 2),
-                             y * TILE_SIZE + ((TILE_SIZE - letterSize.y) / 2)},
-                   TILE_SIZE, 0, BLACK);
       }
+
+      DrawRectangle(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE, BLACK);
+      DrawRectangle(x * TILE_SIZE + 1, y * TILE_SIZE + 1, TILE_SIZE - 2,
+                    TILE_SIZE - 2, LIGHTGRAY);
+      Vector2 letterSize =
+          MeasureTextEx(_font, &_grid.tiles[i].letter, LETTER_SIZE, 0);
+      DrawTextEx(_font, &_grid.tiles[i].letter,
+                 (Vector2){x * TILE_SIZE + ((TILE_SIZE - letterSize.x) / 2),
+                           y * TILE_SIZE + ((TILE_SIZE - letterSize.y) / 2)},
+                 TILE_SIZE, 0, BLACK);
     }
   }
 }
@@ -131,11 +130,12 @@ void SpawnPiece() {
     _player.indexes[0] = leftIndex;
     _player.indexes[1] = rightIndex;
     _player.rotation = NONE;
-
     _player.tiles[0]->letter = _letters[GetRandomValue(0, 74)];
+
     do {
       _player.tiles[1]->letter = _letters[GetRandomValue(0, 74)];
     } while (_player.tiles[0]->letter == _player.tiles[1]->letter);
+
   } else {
     _state = GAMEOVER;
   }
@@ -143,18 +143,21 @@ void SpawnPiece() {
 
 bool CheckCollision(int index, int tileIndex) {
 
-  bool movingDown = (index == tileIndex + GRID_X_TILES);
-  bool movingRight = !movingDown && (index > tileIndex);
-  bool movingLeft = !movingRight && (index < tileIndex);
+  bool moving_down = (index == tileIndex + GRID_X_TILES);
+  bool moving_right = !moving_down && (index > tileIndex);
+  bool moving_up = (index == tileIndex - GRID_X_TILES);
+  bool moving_left = !moving_up && (index < tileIndex);
 
   bool collided = false;
 
-  if (movingRight) {
-    collided = (tileIndex % GRID_X_TILES) == GRID_X_TILES - 1;
-  } else if (movingDown) {
-    collided = index > (GRID_X_TILES * GRID_Y_TILES) - 1;
-  } else if (movingLeft) {
-    collided = (tileIndex % GRID_X_TILES) == 0;
+  if (moving_down) {
+    collided = tileIndex > (GRID_X_TILES * (GRID_Y_TILES - 1) - 1);
+  } else if (moving_right) {
+    collided = tileIndex % GRID_X_TILES == GRID_X_TILES - 1;
+  } else if (moving_up) {
+    collided = tileIndex < GRID_X_TILES;
+  } else if (moving_left) {
+    collided = tileIndex % GRID_X_TILES == 0;
   }
 
   return (!collided && _grid.tiles[index].state != STATIC);
@@ -165,26 +168,26 @@ void UnsetTile(Tile *t) {
   t->letter = ' ';
 }
 
-void SetPlayer(int new_index0, int new_index1) {
-  Tile tmp1 = *_player.tiles[0];
-  Tile tmp2 = *_player.tiles[1];
+void SetPlayer(int i0, int i1) {
+  Tile tmp0 = *_player.tiles[0];
+  Tile tmp1 = *_player.tiles[1];
   UnsetTile(&_grid.tiles[_player.indexes[0]]);
   UnsetTile(&_grid.tiles[_player.indexes[1]]);
-  _player.indexes[0] = new_index0;
-  _player.indexes[1] = new_index1;
-  _grid.tiles[_player.indexes[0]] = tmp1;
-  _grid.tiles[_player.indexes[1]] = tmp2;
+  _player.indexes[0] = i0;
+  _player.indexes[1] = i1;
+  _grid.tiles[_player.indexes[0]] = tmp0;
+  _grid.tiles[_player.indexes[1]] = tmp1;
   _player.tiles[0] = &_grid.tiles[_player.indexes[0]];
   _player.tiles[1] = &_grid.tiles[_player.indexes[1]];
 }
 
 bool MovePlayer(int dirX, int dirY) {
-  int new_index0 = _player.indexes[0] + dirX + (dirY * GRID_X_TILES);
-  int new_index1 = _player.indexes[1] + dirX + (dirY * GRID_X_TILES);
-  if (CheckCollision(new_index0, _player.indexes[0]) &&
-      CheckCollision(new_index1, _player.indexes[1])) {
+  int i0 = _player.indexes[0] + dirX + (dirY * GRID_X_TILES);
+  int i1 = _player.indexes[1] + dirX + (dirY * GRID_X_TILES);
+  if (CheckCollision(i0, _player.indexes[0]) &&
+      CheckCollision(i1, _player.indexes[1])) {
 
-    SetPlayer(new_index0, new_index1);
+    SetPlayer(i0, i1);
     return true;
   }
 
@@ -192,38 +195,38 @@ bool MovePlayer(int dirX, int dirY) {
 }
 
 bool RotatePlayer(Spin spin) {
-  int index0 = _player.indexes[0];
-  int index1 = _player.indexes[1];
-  PlayerRotation rotation = _player.rotation;
+  int i0 = _player.indexes[0];
+  int i1 = _player.indexes[1];
+  PlayerRotation rot = _player.rotation;
 
-  if ((_player.rotation == NONE && spin == C_CLOCKWISE) ||
-      (_player.rotation == THREE_QUARTER && spin == CLOCKWISE)) {
-    index0 += -GRID_X_TILES;
-    index1 += -1;
-    rotation = spin == C_CLOCKWISE ? QUARTER : HALF;
-  } else if ((_player.rotation == QUARTER && spin == C_CLOCKWISE) ||
-             (_player.rotation == NONE && spin == CLOCKWISE)) {
-    index0 += 1;
-    index1 += -GRID_X_TILES;
-    rotation = spin == C_CLOCKWISE ? HALF : THREE_QUARTER;
-  } else if ((_player.rotation == HALF && spin == C_CLOCKWISE) ||
-             (_player.rotation == QUARTER && spin == CLOCKWISE)) {
-    index0 += GRID_X_TILES;
-    index1 += 1;
-    rotation = spin == C_CLOCKWISE ? THREE_QUARTER : NONE;
-  } else if ((_player.rotation == THREE_QUARTER && spin == C_CLOCKWISE) ||
-             (_player.rotation == HALF && spin == CLOCKWISE)) {
-    index0 += -1;
-    index1 += GRID_X_TILES;
-    rotation = spin == C_CLOCKWISE ? NONE : QUARTER;
+  if ((rot == NONE && spin == C_CLOCKWISE) ||
+      (rot == THREE_QUARTER && spin == CLOCKWISE)) {
+    i0 += -GRID_X_TILES;
+    i1 += -1;
+    rot = spin == C_CLOCKWISE ? QUARTER : HALF;
+  } else if ((rot == QUARTER && spin == C_CLOCKWISE) ||
+             (rot == NONE && spin == CLOCKWISE)) {
+    i0 += 1;
+    i1 += -GRID_X_TILES;
+    rot = spin == C_CLOCKWISE ? HALF : THREE_QUARTER;
+  } else if ((rot == HALF && spin == C_CLOCKWISE) ||
+             (rot == QUARTER && spin == CLOCKWISE)) {
+    i0 += GRID_X_TILES;
+    i1 += 1;
+    rot = spin == C_CLOCKWISE ? THREE_QUARTER : NONE;
+  } else if ((rot == THREE_QUARTER && spin == C_CLOCKWISE) ||
+             (rot == HALF && spin == CLOCKWISE)) {
+    i0 += -1;
+    i1 += GRID_X_TILES;
+    rot = spin == C_CLOCKWISE ? NONE : QUARTER;
   }
 
-  if (CheckCollision(index0, index1)) {
-    _player.rotation = rotation;
-    SetPlayer(index0, index1);
+  if (CheckCollision(i0, _player.indexes[0]) &&
+      CheckCollision(i1, _player.indexes[1])) {
+    _player.rotation = rot;
+    SetPlayer(i0, i1);
     return true;
   }
-
   return false;
 }
 
