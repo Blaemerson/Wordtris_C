@@ -59,9 +59,9 @@ typedef struct Player {
 } Player;
 
 typedef struct SoundEffects {
-  Sound moveSuccess;
-  Sound moveFailure;
-  Sound wordFound;
+  Sound move_success;
+  Sound move_failure;
+  Sound word_found;
 } SoundEffects;
 
 GameState _state;
@@ -70,26 +70,26 @@ Grid _grid;
 Player _player;
 Font _font;
 
-void InitGrid() {
+void init_grid() {
   for (int i = 0; i < GRID_X_TILES * GRID_Y_TILES; i++) {
     _grid.tiles[i].state = EMPTY;
     _grid.tiles[i].letter = ' ';
   }
 }
 
-void InitSounds() {
-  _sfx.moveSuccess = LoadSound("resources/move.wav");
-  _sfx.moveFailure = LoadSound("resources/stuck.wav");
-  _sfx.wordFound = LoadSound("resources/correct.wav");
+void init_sounds() {
+  _sfx.move_success = LoadSound("resources/move.wav");
+  _sfx.move_failure = LoadSound("resources/stuck.wav");
+  _sfx.word_found = LoadSound("resources/correct.wav");
 }
 
-void InitGame() {
+void init_game() {
   _state = PLAYING;
-  InitGrid();
-  InitSounds();
+  init_grid();
+  init_sounds();
 }
 
-void DrawGameBoard() {
+void draw_game_board() {
   for (int y = 0; y < GRID_Y_TILES; y++) {
     for (int x = 0; x < GRID_X_TILES; x++) {
       int i = y * GRID_X_TILES + x;
@@ -113,7 +113,7 @@ void DrawGameBoard() {
   }
 }
 
-void SpawnPiece() {
+void spawn_player() {
   if (_player.tiles[0] && _player.tiles[1]) {
     _player.tiles[0]->state = STATIC;
     _player.tiles[1]->state = STATIC;
@@ -141,7 +141,7 @@ void SpawnPiece() {
   }
 }
 
-bool CheckCollision(int index, int tileIndex) {
+bool check_collision(int index, int tileIndex) {
 
   bool moving_down = (index == tileIndex + GRID_X_TILES);
   bool moving_right = !moving_down && (index > tileIndex);
@@ -163,16 +163,16 @@ bool CheckCollision(int index, int tileIndex) {
   return (!collided && _grid.tiles[index].state != STATIC);
 }
 
-void UnsetTile(Tile *t) {
+void unset_tile(Tile *t) {
   t->state = EMPTY;
   t->letter = ' ';
 }
 
-void SetPlayer(int i0, int i1) {
+void set_player(int i0, int i1) {
   Tile tmp0 = *_player.tiles[0];
   Tile tmp1 = *_player.tiles[1];
-  UnsetTile(&_grid.tiles[_player.indexes[0]]);
-  UnsetTile(&_grid.tiles[_player.indexes[1]]);
+  unset_tile(&_grid.tiles[_player.indexes[0]]);
+  unset_tile(&_grid.tiles[_player.indexes[1]]);
   _player.indexes[0] = i0;
   _player.indexes[1] = i1;
   _grid.tiles[_player.indexes[0]] = tmp0;
@@ -181,20 +181,20 @@ void SetPlayer(int i0, int i1) {
   _player.tiles[1] = &_grid.tiles[_player.indexes[1]];
 }
 
-bool MovePlayer(int dirX, int dirY) {
-  int i0 = _player.indexes[0] + dirX + (dirY * GRID_X_TILES);
-  int i1 = _player.indexes[1] + dirX + (dirY * GRID_X_TILES);
-  if (CheckCollision(i0, _player.indexes[0]) &&
-      CheckCollision(i1, _player.indexes[1])) {
+bool move_player(int dir_x, int dir_y) {
+  int i0 = _player.indexes[0] + dir_x + (dir_y * GRID_X_TILES);
+  int i1 = _player.indexes[1] + dir_x + (dir_y * GRID_X_TILES);
+  if (check_collision(i0, _player.indexes[0]) &&
+      check_collision(i1, _player.indexes[1])) {
 
-    SetPlayer(i0, i1);
+    set_player(i0, i1);
     return true;
   }
 
   return false;
 }
 
-bool RotatePlayer(Spin spin) {
+bool rotate_player(Spin spin) {
   int i0 = _player.indexes[0];
   int i1 = _player.indexes[1];
   PlayerRotation rot = _player.rotation;
@@ -221,20 +221,20 @@ bool RotatePlayer(Spin spin) {
     rot = spin == C_CLOCKWISE ? NONE : QUARTER;
   }
 
-  if (CheckCollision(i0, _player.indexes[0]) &&
-      CheckCollision(i1, _player.indexes[1])) {
+  if (check_collision(i0, _player.indexes[0]) &&
+      check_collision(i1, _player.indexes[1])) {
     _player.rotation = rot;
-    SetPlayer(i0, i1);
+    set_player(i0, i1);
     return true;
   }
   return false;
 }
 
-void DrawFrame() {
+void draw_frame() {
   BeginDrawing();
 
   ClearBackground(RAYWHITE);
-  DrawGameBoard();
+  draw_game_board();
 
   EndDrawing();
 }
@@ -243,9 +243,9 @@ int main() {
   InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Wordtris");
   InitAudioDevice();
   SetTargetFPS(60);
-  InitGame();
+  init_game();
   _font = LoadFontEx("./Arialbd.TTF", LETTER_SIZE, 0, 0);
-  SpawnPiece();
+  spawn_player();
 
   double tick_time = 1.0;
   double time = GetTime();
@@ -253,41 +253,41 @@ int main() {
     // in-game tick
     if (GetTime() >= time + tick_time) {
       time = GetTime();
-      if (!MovePlayer(0, 1)) {
-        PlaySound(_sfx.moveFailure);
-        SpawnPiece();
+      if (!move_player(0, 1)) {
+        PlaySound(_sfx.move_failure);
+        spawn_player();
       }
     }
 
     switch (GetKeyPressed()) {
     case (KEY_A):
-      MovePlayer(-1, 0) ? PlaySound(_sfx.moveSuccess)
-                        : PlaySound(_sfx.moveFailure);
+      move_player(-1, 0) ? PlaySound(_sfx.move_success)
+                        : PlaySound(_sfx.move_failure);
       break;
     case (KEY_D):
-      MovePlayer(1, 0) ? PlaySound(_sfx.moveSuccess)
-                       : PlaySound(_sfx.moveFailure);
+      move_player(1, 0) ? PlaySound(_sfx.move_success)
+                       : PlaySound(_sfx.move_failure);
       break;
     case (KEY_S):
-      if (MovePlayer(0, 1)) {
+      if (move_player(0, 1)) {
         time = GetTime();
-        PlaySound(_sfx.moveSuccess);
+        PlaySound(_sfx.move_success);
       } else {
         time = tick_time;
       }
       break;
     case (KEY_K):
-      RotatePlayer(C_CLOCKWISE);
+      rotate_player(C_CLOCKWISE);
       break;
     case (KEY_J):
-      RotatePlayer(CLOCKWISE);
+      rotate_player(CLOCKWISE);
       break;
     };
 
     if (_state == GAMEOVER) {
       break;
     }
-    DrawFrame();
+    draw_frame();
   }
 
   UnloadFont(_font);
