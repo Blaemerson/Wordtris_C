@@ -7,14 +7,14 @@
 
 #include "words.c"
 
-#define GRID_X_TILES 6
-#define GRID_Y_TILES 10
+#define GRID_WIDTH 6
+#define GRID_HEIGHT 10
+#define NUM_TILES (GRID_WIDTH * GRID_HEIGHT)
 
 #define TILE_SIZE 72
-#define LETTER_SIZE TILE_SIZE
 
-#define SCREEN_WIDTH GRID_X_TILES *TILE_SIZE + (4 * TILE_SIZE)
-#define SCREEN_HEIGHT GRID_Y_TILES *TILE_SIZE
+#define SCREEN_WIDTH (GRID_WIDTH * TILE_SIZE) + (4 * TILE_SIZE)
+#define SCREEN_HEIGHT (GRID_HEIGHT * TILE_SIZE)
 
 char _letter_probs[] = {
     'A', 'A', 'A', 'A', 'A', 'A', 'B', 'B', 'C', 'C', 'C', 'D', 'D', 'D', 'D',
@@ -28,7 +28,7 @@ bool bin_search(char *target) {
   int number_words = sizeof(WORDS) / sizeof(WORDS[0]);
   int bottom = 0;
   int middle;
-  int top = number_words -1;
+  int top = number_words - 1;
 
   while (bottom <= top) {
     middle = (bottom + top) / 2;
@@ -55,12 +55,13 @@ typedef struct Tile {
 } Tile;
 
 typedef struct Grid {
-  Tile tiles[GRID_X_TILES * GRID_Y_TILES];
+  Tile tiles[GRID_WIDTH * GRID_HEIGHT];
 } Grid;
 
 typedef enum GameState {
   GAMEOVER,
   PLAYING,
+  PAUSED,
 } GameState;
 
 typedef enum Spin {
@@ -69,10 +70,10 @@ typedef enum Spin {
 } Spin;
 
 typedef enum PlayerRotation {
-  NONE = 0,
-  QUARTER = 1,
-  HALF = 2,
-  THREE_QUARTER = 3,
+  ROT_0,
+  ROT_1,
+  ROT_2,
+  ROT_3,
 } PlayerRotation;
 
 typedef struct Player {
@@ -93,9 +94,8 @@ Grid _grid;
 Player _player;
 Font _font;
 
-
 void init_grid() {
-  for (int i = 0; i < GRID_X_TILES * GRID_Y_TILES; i++) {
+  for (int i = 0; i < NUM_TILES; i++) {
     _grid.tiles[i].state = EMPTY;
     _grid.tiles[i].letter = ' ';
   }
@@ -113,81 +113,46 @@ void init_game() {
   init_sounds();
 }
 
+void find_substrs(char *str) {
+  int n = strlen(str);
+
+  for (int i = 0; i < n; i++) {
+    char temp[n - i + 1];
+    int tempindex = 0;
+    for (int j = i; j < n; j++) {
+      temp[tempindex++] = tolower(str[j]);
+      temp[tempindex] = '\0';
+      if (strlen(temp) > 2 && bin_search(temp)) {
+        printf("word found: %s\n", temp);
+      }
+    }
+  }
+}
+
 void scan_game_board() {
-  char line[GRID_X_TILES];
-  for (int row = 0; row < GRID_Y_TILES; row++) {
-    for (int x = GRID_X_TILES * row; x < GRID_X_TILES * (row + 1); x++) {
-      line[x - (GRID_X_TILES * row)] = _grid.tiles[x].letter;
+  char line[GRID_WIDTH];
+  for (int row = 0; row < GRID_HEIGHT; row++) {
+    for (int x = GRID_WIDTH * row; x < GRID_WIDTH * (row + 1); x++) {
+      line[x - (GRID_WIDTH * row)] = _grid.tiles[x].letter;
     }
-    printf("line = %s\n", line);
 
-    int n = strlen(line);
-
-    for (int i = 0; i < n; i++)
-    {
-        char temp[n - i + 1];
-        int tempindex = 0;
-        for (int j = i; j < n; j++)
-        {
-            temp[tempindex++] = tolower(line[j]);
-            temp[tempindex] = '\0';
-            if (strlen(temp) > 2 && bin_search(temp)) {
-              printf("word found: %s\n", temp);
-            }
-            // printf("%s\n", temp);
-        }
-    }
+    find_substrs(line);
   }
 
-  char v_line[GRID_Y_TILES];
-
-  for (int x = 0; x < GRID_X_TILES; x++) {
-    for (int y = 0; y < GRID_Y_TILES * GRID_X_TILES; y += GRID_X_TILES) {
-      v_line[y / GRID_X_TILES] = _grid.tiles[x + y].letter;
+  char v_line[GRID_HEIGHT];
+  for (int x = 0; x < GRID_WIDTH; x++) {
+    for (int y = 0; y < NUM_TILES; y += GRID_WIDTH) {
+      v_line[y / GRID_WIDTH] = _grid.tiles[x + y].letter;
     }
-    printf("v_line = %s\n", v_line);
 
-    int n = strlen(v_line);
-
-    for (int i = 0; i < n; i++)
-    {
-        char temp[n - i + 1];
-        int tempindex = 0;
-        for (int j = i; j < n; j++)
-        {
-            temp[tempindex++] = tolower(v_line[j]);
-            temp[tempindex] = '\0';
-            if (strlen(temp) > 2 && bin_search(temp)) {
-              printf("word found: %s\n", temp);
-            }
-            // printf("%s\n", temp);
-        }
-    }
+    find_substrs(v_line);
   }
-  // for(int i = 0; i < n; i++) {
-  //   for(int j = i; j < n; j++) {   /* print subline from i to j */
-  //     for(int k = i; k <= j; k++) {
-  //       if (line[k] != ' ') {
-  //         printf("%c", line[k]);
-  //       } else {
-  //         break;
-  //       }
-  //     }
-  //     printf("\nnext\n");
-  //   }
-  // }
-
-    /*
-     * Fix start index in outer loop.
-     * Reveal new character in inner loop till end of string.
-     * Print till-now-formed string.
-     */
 }
 
 void draw_game_board() {
-  for (int y = 0; y < GRID_Y_TILES; y++) {
-    for (int x = 0; x < GRID_X_TILES; x++) {
-      int i = y * GRID_X_TILES + x;
+  for (int y = 0; y < GRID_HEIGHT; y++) {
+    for (int x = 0; x < GRID_WIDTH; x++) {
+      int i = y * GRID_WIDTH + x;
       if (_grid.tiles[i].state == EMPTY) {
         DrawRectangle(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE, GRAY);
         DrawRectangle(x * TILE_SIZE + 1, y * TILE_SIZE + 1, TILE_SIZE - 2,
@@ -199,7 +164,7 @@ void draw_game_board() {
       DrawRectangle(x * TILE_SIZE + 1, y * TILE_SIZE + 1, TILE_SIZE - 2,
                     TILE_SIZE - 2, LIGHTGRAY);
       Vector2 letterSize =
-          MeasureTextEx(_font, &_grid.tiles[i].letter, LETTER_SIZE, 0);
+          MeasureTextEx(_font, &_grid.tiles[i].letter, TILE_SIZE, 0);
       DrawTextEx(_font, &_grid.tiles[i].letter,
                  (Vector2){x * TILE_SIZE + ((TILE_SIZE - letterSize.x) / 2),
                            y * TILE_SIZE + ((TILE_SIZE - letterSize.y) / 2)},
@@ -208,25 +173,31 @@ void draw_game_board() {
   }
 }
 
-void spawn_player() {
-  if (_player.tiles[0] && _player.tiles[1]) {
-    _player.tiles[0]->state = STATIC;
-    _player.tiles[1]->state = STATIC;
+void stop_blk(Tile *t) {
+  if (t) {
+    t->state = STATIC;
   }
-  int leftIndex = (GRID_X_TILES / 2) - 1;
-  int rightIndex = (GRID_X_TILES / 2);
-  if (_grid.tiles[leftIndex].state == EMPTY &&
-      _grid.tiles[rightIndex].state == EMPTY) {
+}
 
-    _player.tiles[0] = &_grid.tiles[leftIndex];
-    _player.tiles[1] = &_grid.tiles[rightIndex];
+void spawn_player() {
+  // set current player block to static
+  stop_blk(_player.tiles[0]);
+  stop_blk(_player.tiles[1]);
+
+  int l_idx = (GRID_WIDTH / 2) - 1;
+  int r_idx = (GRID_WIDTH / 2);
+  if (_grid.tiles[l_idx].state == EMPTY && _grid.tiles[r_idx].state == EMPTY) {
+
+    _player.tiles[0] = &_grid.tiles[l_idx];
+    _player.tiles[1] = &_grid.tiles[r_idx];
+    _player.indexes[0] = l_idx;
+    _player.indexes[1] = r_idx;
     _player.tiles[0]->state = FALLING;
     _player.tiles[1]->state = FALLING;
-    _player.indexes[0] = leftIndex;
-    _player.indexes[1] = rightIndex;
-    _player.rotation = NONE;
+    _player.rotation = ROT_0;
     _player.tiles[0]->letter = _letter_probs[GetRandomValue(0, 74)];
 
+    // prevent two of the same letter being chosen
     do {
       _player.tiles[1]->letter = _letter_probs[GetRandomValue(0, 74)];
     } while (_player.tiles[0]->letter == _player.tiles[1]->letter);
@@ -238,21 +209,21 @@ void spawn_player() {
 
 bool check_collision(int index, int tileIndex) {
 
-  bool moving_down = (index == tileIndex + GRID_X_TILES);
+  bool moving_down = (index == tileIndex + GRID_WIDTH);
   bool moving_right = !moving_down && (index > tileIndex);
-  bool moving_up = (index == tileIndex - GRID_X_TILES);
+  bool moving_up = (index == tileIndex - GRID_WIDTH);
   bool moving_left = !moving_up && (index < tileIndex);
 
   bool collided = false;
 
   if (moving_down) {
-    collided = tileIndex > (GRID_X_TILES * (GRID_Y_TILES - 1) - 1);
+    collided = tileIndex > (GRID_WIDTH * (GRID_HEIGHT - 1) - 1);
   } else if (moving_right) {
-    collided = tileIndex % GRID_X_TILES == GRID_X_TILES - 1;
+    collided = tileIndex % GRID_WIDTH == GRID_WIDTH - 1;
   } else if (moving_up) {
-    collided = tileIndex < GRID_X_TILES;
+    collided = tileIndex < GRID_WIDTH;
   } else if (moving_left) {
-    collided = tileIndex % GRID_X_TILES == 0;
+    collided = tileIndex % GRID_WIDTH == 0;
   }
 
   return (!collided && _grid.tiles[index].state != STATIC);
@@ -277,8 +248,8 @@ void set_player(int i0, int i1) {
 }
 
 bool move_player(int dir_x, int dir_y) {
-  int i0 = _player.indexes[0] + dir_x + (dir_y * GRID_X_TILES);
-  int i1 = _player.indexes[1] + dir_x + (dir_y * GRID_X_TILES);
+  int i0 = _player.indexes[0] + dir_x + (dir_y * GRID_WIDTH);
+  int i1 = _player.indexes[1] + dir_x + (dir_y * GRID_WIDTH);
   if (check_collision(i0, _player.indexes[0]) &&
       check_collision(i1, _player.indexes[1])) {
 
@@ -294,26 +265,26 @@ bool rotate_player(Spin spin) {
   int i1 = _player.indexes[1];
   PlayerRotation rot = _player.rotation;
 
-  if ((rot == NONE && spin == COUNTER_CLOCKW) ||
-      (rot == THREE_QUARTER && spin == CLOCKW)) {
-    i0 += -GRID_X_TILES;
+  if ((rot == ROT_0 && spin == COUNTER_CLOCKW) ||
+      (rot == ROT_3 && spin == CLOCKW)) {
+    i0 += -GRID_WIDTH;
     i1 += -1;
-    rot = spin == COUNTER_CLOCKW ? QUARTER : HALF;
-  } else if ((rot == QUARTER && spin == COUNTER_CLOCKW) ||
-             (rot == NONE && spin == CLOCKW)) {
+    rot = spin == COUNTER_CLOCKW ? ROT_1 : ROT_2;
+  } else if ((rot == ROT_1 && spin == COUNTER_CLOCKW) ||
+             (rot == ROT_0 && spin == CLOCKW)) {
     i0 += 1;
-    i1 += -GRID_X_TILES;
-    rot = spin == COUNTER_CLOCKW ? HALF : THREE_QUARTER;
-  } else if ((rot == HALF && spin == COUNTER_CLOCKW) ||
-             (rot == QUARTER && spin == CLOCKW)) {
-    i0 += GRID_X_TILES;
+    i1 += -GRID_WIDTH;
+    rot = spin == COUNTER_CLOCKW ? ROT_2 : ROT_3;
+  } else if ((rot == ROT_2 && spin == COUNTER_CLOCKW) ||
+             (rot == ROT_1 && spin == CLOCKW)) {
+    i0 += GRID_WIDTH;
     i1 += 1;
-    rot = spin == COUNTER_CLOCKW ? THREE_QUARTER : NONE;
-  } else if ((rot == THREE_QUARTER && spin == COUNTER_CLOCKW) ||
-             (rot == HALF && spin == CLOCKW)) {
+    rot = spin == COUNTER_CLOCKW ? ROT_3 : ROT_0;
+  } else if ((rot == ROT_3 && spin == COUNTER_CLOCKW) ||
+             (rot == ROT_2 && spin == CLOCKW)) {
     i0 += -1;
-    i1 += GRID_X_TILES;
-    rot = spin == COUNTER_CLOCKW ? NONE : QUARTER;
+    i1 += GRID_WIDTH;
+    rot = spin == COUNTER_CLOCKW ? ROT_0 : ROT_1;
   }
 
   if (check_collision(i0, _player.indexes[0]) &&
@@ -340,7 +311,7 @@ int main() {
   SetTargetFPS(60);
   init_game();
 
-  _font = LoadFontEx("./Arialbd.TTF", LETTER_SIZE, 0, 0);
+  _font = LoadFontEx("./Arialbd.TTF", TILE_SIZE, 0, 0);
   spawn_player();
 
   double tick_time = 1.0;
@@ -359,11 +330,11 @@ int main() {
     switch (GetKeyPressed()) {
     case (KEY_A):
       move_player(-1, 0) ? PlaySound(_sfx.move_success)
-                        : PlaySound(_sfx.move_failure);
+                         : PlaySound(_sfx.move_failure);
       break;
     case (KEY_D):
       move_player(1, 0) ? PlaySound(_sfx.move_success)
-                       : PlaySound(_sfx.move_failure);
+                        : PlaySound(_sfx.move_failure);
       break;
     case (KEY_S):
       if (move_player(0, 1)) {
