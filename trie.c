@@ -23,13 +23,13 @@ struct TrieNode* createNode() {
     return node;
 }
 
-void freeTrie(struct TrieNode* node) {
+void destroyTrie(struct TrieNode* node) {
     if (node == NULL) {
         return;
     }
 
     for (int i = 0; i < 26; i++) {
-        freeTrie(node->children[i]);
+        destroyTrie(node->children[i]);
     }
 
     free(node);
@@ -62,7 +62,7 @@ int constructTrie(struct TrieNode* root, const char* dictionaryFile) {
         // Handle error opening the dictionary file
     }
 
-    char word[100];
+    char word[10];
 
     while (fgets(word, sizeof(word), file) != NULL) {
         // Remove newline character from the word, if present

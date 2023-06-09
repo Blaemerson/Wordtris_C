@@ -4,8 +4,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "trie.c"
+#include "pool.c"
 
 // #include "words.c"
 
@@ -65,13 +67,7 @@ Tile _grid[GRID_WIDTH * GRID_HEIGHT];
 Player _player;
 Font _font;
 
-char _letterProbs[] = {
-    'A', 'A', 'A', 'A', 'A', 'A', 'B', 'B', 'C', 'C', 'C', 'D', 'D', 'D', 'D',
-    'E', 'E', 'E', 'E', 'E', 'E', 'F', 'F', 'F', 'G', 'G', 'H', 'H', 'I', 'I',
-    'I', 'I', 'I', 'J', 'K', 'K', 'L', 'L', 'L', 'L', 'M', 'M', 'M', 'O', 'O',
-    'O', 'O', 'O', 'P', 'P', 'P', 'Q', 'R', 'R', 'R', 'S', 'S', 'S', 'T', 'T',
-    'T', 'T', 'U', 'U', 'U', 'U', 'U', 'V', 'V', 'W', 'W', 'X', 'Y', 'Y', 'Z',
-};
+struct LetterPool pool;
 
 void initGrid() {
     for (int i = 0; i < NUM_TILES; i++) {
@@ -91,42 +87,6 @@ void initGame() {
     initGrid();
     initSounds();
 }
-
-// void find_substrs(char *str) {
-//     int n = strlen(str);
-//
-//     for (int i = 0; i < n; i++) {
-//         char temp[n - i + 1];
-//         int tempindex = 0;
-//         for (int j = i; j < n; j++) {
-//             temp[tempindex++] = tolower(str[j]);
-//             temp[tempindex] = '\0';
-//             if (strlen(temp) > 2 && bin_search(temp)) {
-//                 printf("word found: %s\n", temp);
-//             }
-//         }
-//     }
-// }
-
-// void scan_game_board() {
-//     char line[GRID_WIDTH];
-//     for (int row = 0; row < GRID_HEIGHT; row++) {
-//         for (int x = GRID_WIDTH * row; x < GRID_WIDTH * (row + 1); x++) {
-//             line[x - (GRID_WIDTH * row)] = _grid[x].letter;
-//         }
-//
-//         find_substrs(line);
-//     }
-//
-//     char v_line[GRID_HEIGHT];
-//     for (int x = 0; x < GRID_WIDTH; x++) {
-//         for (int y = 0; y < NUM_TILES; y += GRID_WIDTH) {
-//             v_line[y / GRID_WIDTH] = _grid[x + y].letter;
-//         }
-//
-//         find_substrs(v_line);
-//     }
-// }
 
 void drawGameBoard() {
     for (int y = 0; y < GRID_HEIGHT; y++) {
@@ -178,8 +138,8 @@ void spawnPlayer() {
         _player.tiles[0]->state = FALLING;
         _player.tiles[1]->state = FALLING;
         _player.rotation = ROT_0;
-        _player.tiles[0]->letter = _letterProbs[GetRandomValue(0, 74)];
-        _player.tiles[1]->letter = _letterProbs[GetRandomValue(0, 74)];
+        _player.tiles[0]->letter = getRandomLetter(&pool);
+        _player.tiles[1]->letter = getRandomLetter(&pool);
     } else {
         _state = GAMEOVER;
     }
@@ -283,6 +243,35 @@ void drawFrame() {
     EndDrawing();
 }
 
+void populateLetterPool(struct LetterPool* pool) {
+    addLetter(pool, 'A', 6);
+    addLetter(pool, 'B', 5);
+    addLetter(pool, 'C', 4);
+    addLetter(pool, 'D', 6);
+    addLetter(pool, 'E', 9);
+    addLetter(pool, 'F', 4);
+    addLetter(pool, 'G', 4);
+    addLetter(pool, 'H', 3);
+    addLetter(pool, 'I', 8);
+    addLetter(pool, 'J', 1);
+    addLetter(pool, 'K', 2);
+    addLetter(pool, 'L', 3);
+    addLetter(pool, 'M', 2);
+    addLetter(pool, 'N', 4);
+    addLetter(pool, 'O', 5);
+    addLetter(pool, 'P', 3);
+    addLetter(pool, 'Q', 1);
+    addLetter(pool, 'R', 3);
+    addLetter(pool, 'S', 4);
+    addLetter(pool, 'T', 3);
+    addLetter(pool, 'U', 4);
+    addLetter(pool, 'V', 1);
+    addLetter(pool, 'W', 2);
+    addLetter(pool, 'X', 1);
+    addLetter(pool, 'Y', 2);
+    addLetter(pool, 'Z', 1);
+}
+
 int main() {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Wordtris");
     InitAudioDevice();
@@ -290,10 +279,15 @@ int main() {
     initGame();
 
     _font = LoadFontEx("./Arialbd.TTF", TILE_SIZE, 0, 0);
-    spawnPlayer();
 
     struct TrieNode* dictTrieRoot = createNode();
     constructTrie(dictTrieRoot, "./dictionary.txt");
+
+    srand(time(NULL));
+    initializeLetterPool(&pool);
+    populateLetterPool(&pool);
+
+    spawnPlayer();
 
     double tick_time = 1.0;
     double time = GetTime();
@@ -339,7 +333,8 @@ int main() {
         drawFrame();
     }
 
-    freeTrie(dictTrieRoot);
+    destroyLetterPool(&pool);
+    destroyTrie(dictTrieRoot);
 
     UnloadFont(_font);
     CloseWindow();
