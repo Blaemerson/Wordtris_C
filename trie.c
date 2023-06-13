@@ -11,7 +11,6 @@ struct TrieNode {
 };
 
 struct TrieNode* createNode() {
-    printf("createNoe\n");
     struct TrieNode* node = (struct TrieNode*)malloc(sizeof(struct TrieNode));
 
     for (int i = 0; i < MAX_CHILDREN; i++) {
@@ -36,7 +35,6 @@ void destroyTrie(struct TrieNode* node) {
 }
 
 void insertWord(struct TrieNode* root, const char* word) {
-    printf("insert\n");
     struct TrieNode* curr = root;
 
     for (int i = 0; word[i] != '\0'; i++) {
@@ -53,13 +51,12 @@ void insertWord(struct TrieNode* root, const char* word) {
 }
 
 int constructTrie(struct TrieNode* root, const char* dictionaryFile) {
-    printf("consruct\n");
     FILE* file = fopen(dictionaryFile, "r");
 
     if (file == NULL) {
+        // Handle error opening the dictionary file
         printf("ERROR in constructTrie: unable to open dictionary file");
         return -1;
-        // Handle error opening the dictionary file
     }
 
     char word[10];
