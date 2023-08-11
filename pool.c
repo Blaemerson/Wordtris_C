@@ -2,16 +2,7 @@
 #include <stdlib.h>
 #include <time.h>
 
-struct LetterNode {
-    char letter;
-    int weight;
-    struct LetterNode* next;
-};
-
-struct LetterPool {
-    struct LetterNode* head;
-    int totalWeight;
-};
+#include "pool.h"
 
 void initializeLetterPool(struct LetterPool* pool) {
     pool->head = NULL;

@@ -6,8 +6,8 @@
 #include <string.h>
 #include <time.h>
 
-#include "pool.c"
-#include "trie.c"
+#include "pool.h"
+#include "trie.h"
 
 #define GRID_WIDTH 6
 #define GRID_HEIGHT 10
@@ -17,17 +17,6 @@
 
 #define SCREEN_WIDTH (GRID_WIDTH * TILE_SIZE) + (4 * TILE_SIZE)
 #define SCREEN_HEIGHT (GRID_HEIGHT * TILE_SIZE)
-
-typedef enum TileState {
-    FALLING,
-    STATIC,
-    EMPTY,
-} TileState;
-
-typedef struct Tile {
-    TileState state;
-    char letter;
-} Tile;
 
 typedef enum GameState {
     GAMEOVER,
@@ -47,9 +36,21 @@ typedef enum PlayerRotation {
     ROT_3,
 } PlayerRotation;
 
+typedef enum TileState {
+    EMPTY,
+    STATIC,
+    PLAYER,
+    FALLING,
+    DESTROY,
+} TileState;
+
+typedef struct Tile {
+    TileState state;
+    char letter;
+} Tile;
+
 typedef struct Player {
-    Tile *tiles[2];
-    int indexes[2];
+    int gridIndices[2];
     PlayerRotation rotation;
 } Player;
 
@@ -59,11 +60,11 @@ typedef struct SoundEffects {
     Sound word_found;
 } SoundEffects;
 
-GameState _state;
-SoundEffects _sfx;
-Tile _grid[GRID_WIDTH * GRID_HEIGHT];
-Player _player;
-Font _font;
+static GameState _state;
+static SoundEffects _sfx;
+static Tile _grid[GRID_WIDTH * GRID_HEIGHT];
+static Player _player;
+static Font _font;
 
 struct TrieNode *dictTrieRoot;
 
@@ -84,7 +85,11 @@ void initSounds() {
 
 void initGame() {
     _state = PLAYING;
+
     initGrid();
+    _player.gridIndices[0] = 1;
+    _player.gridIndices[1] = 1;
+
     initSounds();
 }
 
@@ -92,66 +97,89 @@ void drawGameBoard() {
     for (int y = 0; y < GRID_HEIGHT; y++) {
         for (int x = 0; x < GRID_WIDTH; x++) {
             int i = y * GRID_WIDTH + x;
+
+            const int xPos = x * TILE_SIZE;
+            const int yPos = y * TILE_SIZE;
+
             if (_grid[i].state == EMPTY) {
-                DrawRectangle(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE, GRAY);
-                DrawRectangle(x * TILE_SIZE + 1, y * TILE_SIZE + 1, TILE_SIZE - 2,
-                              TILE_SIZE - 2, WHITE);
+                DrawRectangle(xPos, yPos, TILE_SIZE, TILE_SIZE, GRAY);
+                DrawRectangle(xPos + 1, yPos + 1, TILE_SIZE - 2, TILE_SIZE - 2, WHITE);
                 continue;
             } else if (_grid[i].letter == ' ') {
-                printf("%d\n", i);
+                //printf("%d\n", i);
             }
 
-            DrawRectangle(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE, BLACK);
-            DrawRectangle(x * TILE_SIZE + 1, y * TILE_SIZE + 1, TILE_SIZE - 2,
-                          TILE_SIZE - 2, LIGHTGRAY);
+            DrawRectangle(xPos, yPos, TILE_SIZE, TILE_SIZE, BLACK);
+            DrawRectangle(xPos + 1, yPos + 1, TILE_SIZE - 2, TILE_SIZE - 2, LIGHTGRAY);
+
             Vector2 letterSize = MeasureTextEx(_font, &_grid[i].letter, TILE_SIZE, 0);
+
+            const int xOffset = (TILE_SIZE - letterSize.x) / 2;
+            const int yOffset = (TILE_SIZE - letterSize.y) / 2;
             DrawTextEx(_font, &_grid[i].letter,
-                       (Vector2){x * TILE_SIZE + ((TILE_SIZE - letterSize.x) / 2),
-                       y * TILE_SIZE + ((TILE_SIZE - letterSize.y) / 2)},
+                       (Vector2){xPos + xOffset, yPos + yOffset},
                        TILE_SIZE, 0, BLACK);
         }
     }
 }
 
-
-void stopBlock(Tile *t) {
-    if (t) {
-        t->state = STATIC;
+void clear(int *indices, size_t num) {
+    for (int i = 0; i < num; i++) {
+        _grid[indices[i]].letter = ' ';
+        _grid[indices[i]].state =  EMPTY;
     }
 }
 
+void setPlayer(int i0, int i1, TileState state, PlayerRotation rotation) {
+    printf("setPlayer\n");
+    char l_c = _grid[_player.gridIndices[0]].letter;
+    char r_c = _grid[_player.gridIndices[1]].letter;
+
+    clear(_player.gridIndices, 2);
+
+    _player.gridIndices[0] = i0;
+    _player.gridIndices[1] = i1;
+    _player.rotation = rotation;
+
+    _grid[i0].state = state;
+    _grid[i1].state = state;
+    _grid[i0].letter = l_c;
+    _grid[i1].letter = r_c;
+}
+
+
 void spawnPlayer() {
     // set current player block to static
-    stopBlock(_player.tiles[0]);
-    stopBlock(_player.tiles[1]);
+    int i0, i1 = *(_player.gridIndices);
 
     int l_idx = (GRID_WIDTH / 2) - 1;
     int r_idx = l_idx + 1;
 
-    Tile *l_tile = &_grid[l_idx];
-    Tile *r_tile = &_grid[r_idx];
+    const bool can_spawn = _grid[l_idx].state == EMPTY && _grid[r_idx].state == EMPTY;
 
-    bool can_spawn = l_tile->state == EMPTY && r_tile->state == EMPTY;
     if (can_spawn) {
+
+        //setPlayer(l_idx, r_idx, FALLING, ROT_0);
         _player.rotation = ROT_0;
 
-        _player.tiles[0] = l_tile;
-        _player.indexes[0] = l_idx;
-        _player.tiles[0]->state = FALLING;
-        _player.tiles[0]->letter = getRandomLetter(&pool);
+        _grid[l_idx].state = PLAYER;
+        _grid[l_idx].letter = getRandomLetter(&pool);
 
-        _player.tiles[1] = r_tile;
-        _player.indexes[1] = r_idx;
-        _player.tiles[1]->state = FALLING;
-        _player.tiles[1]->letter = getRandomLetter(&pool);
+        _grid[r_idx].state = PLAYER;
+        _grid[r_idx].letter = getRandomLetter(&pool);
+
+        _player.gridIndices[0] = l_idx;
+        _player.gridIndices[1] = r_idx;
+
     } else {
         _state = GAMEOVER;
     }
 }
 
-bool checkWordViability(char* word) {
+static bool checkWordViability(char* word) {
     bool contains_vowel = false;
     bool contains_consonant = false;
+
     for (int i = 0; i < strlen(word); i++) {
         if (word[i] == 'a' | word[i] == 'e' | word[i] == 'i' | word[i] == 'o' | word[i] == 'u') {
             contains_vowel = true;
@@ -163,7 +191,23 @@ bool checkWordViability(char* word) {
     return contains_vowel && contains_consonant;
 }
 
-bool checkCollision(int index, int tileIndex) {
+static const bool checkSubstringValidity(const char* substring) {
+    const int length = strlen(substring);
+
+    if (length < 3) {
+        return false;
+    }
+
+    for (int i = 0; i < length; i++) {
+        if (substring[i] == ' ') {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static const bool checkCollision(int index, int tileIndex) {
 
     bool moving_down = (index == tileIndex + GRID_WIDTH);
     bool moving_right = !moving_down && (index > tileIndex);
@@ -184,25 +228,9 @@ bool checkCollision(int index, int tileIndex) {
 
     return (!collided && _grid[index].state != STATIC);
 }
-bool isValidSubstring(const char* substring) {
-    int length = strlen(substring);
-    if (length < 3) {
-        return false; // Substring is less than 3 characters
-    }
-    for (int i = 0; i < length; i++) {
-        if (substring[i] == ' ') {
-            return false; // Substring contains a space
-        }
-    }
-    return true; // Substring is valid
-}
 
-void unsetTile(Tile *t) {
-    t->state = EMPTY;
-    t->letter = ' ';
-}
 
-void drawFrame() {
+static void drawFrame() {
     BeginDrawing();
 
     ClearBackground(RAYWHITE);
@@ -213,92 +241,110 @@ void drawFrame() {
 
 
 
-void checkSubstrings(const char* str, const int* indexes) {
+static bool checkSubstrings(const char* str, const int* position) {
     int len = strlen(str);
-    int max_len = len < GRID_HEIGHT ? len : GRID_HEIGHT;
+    int maxLen = len < GRID_HEIGHT ? len : GRID_HEIGHT;
 
-    for (int sub_len = max_len; sub_len >= 3; sub_len--) {
-        for (int i = 0; i <= len - sub_len; i++) {
-            char substr[sub_len + 1];
-            strncpy(substr, str + i, sub_len);
-            substr[sub_len] = '\0';
+    for (int subLen = maxLen; subLen >= 3; subLen--) {
+        for (int i = 0; i <= len - subLen; i++) {
+            char substr[subLen + 1];
+            strncpy(substr, str + i, subLen);
+            substr[subLen] = '\0';
 
-
-            if (checkWordViability(substr) && isValidSubstring(substr)) {
+            if (checkWordViability(substr) && checkSubstringValidity(substr)) {
                 if (searchWord(dictTrieRoot, substr)) {
-                    int index_start = i;
-                    int index_end = i + sub_len;
-                    for (int x = index_start; x < index_end; x++) {
-                        _grid[indexes[x]].state = EMPTY;
-                        _grid[indexes[x]].letter = ' ';
-                        printf("indexes[x] = %d\n", indexes[x]);
-                        printf("%d = %d\n", indexes[x], _grid[indexes[x]].state);
-                        // unsetTile(&_grid[indexes[x]]);
+                    int indexStart = i;
+                    int indexEnd = i + subLen;
+
+                    for (int x = indexStart; x < indexEnd; x++) {
+                        _grid[position[x]].state = EMPTY;
+                        _grid[position[x]].letter = ' ';
                     }
-                    printf("found: %s\n", substr);
-                    return;
+
+                    return true;
                 }
             }
         }
     }
+
+    return false;
 }
 
-void checkForWords(Tile* grid) {
+static bool checkForWords(Tile* grid) {
+    bool wordsFound = false;
     // Horizontal check
     for (int i = 0; i < GRID_HEIGHT * GRID_WIDTH; i += GRID_WIDTH) {
         struct {
             char letters[GRID_WIDTH];
             int indexes[GRID_WIDTH];
         } row;
+
         // char line[GRID_WIDTH];
         for (int j = 0; j < GRID_WIDTH; j++) {
             row.letters[j] = tolower(grid[i+j].letter);
             row.indexes[j] = i + j;
         }
-        checkSubstrings(row.letters, row.indexes);
-    }
-    // Vertical check
 
+        wordsFound = checkSubstrings(row.letters, row.indexes);
+    }
+
+    // Vertical check
     for (int i = 0; i < GRID_WIDTH; i += 1) {
         struct {
             char letters[GRID_HEIGHT];
             int indexes[GRID_HEIGHT];
         } col;
-        // char column[GRID_HEIGHT];
+
         for (int j = 0; j < GRID_HEIGHT; j += 1) {
             int idx = j * GRID_WIDTH + i;
             col.letters[j] = tolower(grid[idx].letter);
             col.indexes[j] = idx;
-            // column[j] = tolower(grid[idx].letter);
         }
-        checkSubstrings(col.letters, col.indexes);
+
+        wordsFound = wordsFound || checkSubstrings(col.letters, col.indexes);
     }
+
+    return wordsFound;
 }
 
-void setPlayer(int i0, int i1, TileState state, PlayerRotation rotation) {
-    Tile tmp0 = *_player.tiles[0];
-    Tile tmp1 = *_player.tiles[1];
-    unsetTile(_player.tiles[0]);
-    unsetTile(_player.tiles[1]);
-    _player.indexes[0] = i0;
-    _player.indexes[1] = i1;
-    _grid[i0] = tmp0;
-    _grid[i1] = tmp1;
-    _player.tiles[0] = &_grid[i0];
-    _player.tiles[1] = &_grid[i1];
-    _player.tiles[0]->state = state;
-    _player.tiles[1]->state = state;
-    _player.rotation = rotation;
+//void clear(int *indices, size_t num) {
+//    for (int i = 0; i < num; i++) {
+//        _grid[indices[i]].letter =  ' ';
+//        _grid[indices[i]].state =  ' ';
+//    }
+//}
+
+bool moveTile() {
+    bool success = false;
+    for (int i = ((GRID_WIDTH * GRID_HEIGHT) - GRID_WIDTH) - 1; i > -1; i--) {
+        if (_grid[i].state == FALLING && _grid[i + GRID_WIDTH].state == EMPTY) {
+            printf("Swapped\n");
+
+            _grid[i + GRID_WIDTH] = _grid[i];
+            _grid[i].letter = ' ';
+            _grid[i].state = EMPTY;
+
+            if (i + GRID_WIDTH > (((GRID_HEIGHT * GRID_WIDTH) - GRID_WIDTH) - 1)) {
+                _grid[i + GRID_WIDTH].state = STATIC;
+            }
+        }
+        if (_grid[i].letter == ' ') {
+            _grid[i].state = EMPTY;
+        }
+    }
+
+    return success;
 }
 
 bool movePlayer(int dir_x, int dir_y) {
     bool success = false;
-    int i0 = _player.indexes[0] + dir_x + (dir_y * GRID_WIDTH);
-    int i1 = _player.indexes[1] + dir_x + (dir_y * GRID_WIDTH);
-    if (checkCollision(i0, _player.indexes[0]) &&
-        checkCollision(i1, _player.indexes[1])) {
+    int i0 = _player.gridIndices[0] + dir_x + (dir_y * GRID_WIDTH);
+    int i1 = _player.gridIndices[1] + dir_x + (dir_y * GRID_WIDTH);
 
-        setPlayer(i0, i1, FALLING, _player.rotation);
+    if (checkCollision(i0, _player.gridIndices[0]) &&
+        checkCollision(i1, _player.gridIndices[1])) {
+
+        setPlayer(i0, i1, PLAYER, _player.rotation);
         success = true;
     }
 
@@ -306,8 +352,8 @@ bool movePlayer(int dir_x, int dir_y) {
 }
 
 bool rotatePlayer(Spin spin) {
-    int i0 = _player.indexes[0];
-    int i1 = _player.indexes[1];
+    int i0 = _player.gridIndices[0];
+    int i1 = _player.gridIndices[1];
 
     PlayerRotation rot = _player.rotation;
 
@@ -333,8 +379,8 @@ bool rotatePlayer(Spin spin) {
     rot = spin == COUNTER_CLOCKW ? ROT_0 : ROT_1;
 }
 
-    if (checkCollision(i0, _player.indexes[0]) &&
-        checkCollision(i1, _player.indexes[1])) {
+    if (checkCollision(i0, _player.gridIndices[0]) &&
+        checkCollision(i1, _player.gridIndices[1])) {
         setPlayer(i0, i1, FALLING, rot);
         return true;
     }
@@ -371,6 +417,23 @@ void populateLetterPool(struct LetterPool *pool) {
     addLetter(pool, 'Z', 1);
 }
 
+void printBoard() {
+    for (int i = 0; i < GRID_HEIGHT; i++) {
+        for (int j = 0; j < GRID_WIDTH; j++) {
+            printf("%d", _grid[i * GRID_WIDTH + j].state);
+        }
+        printf("\n");
+    }
+}
+
+void solidify() {
+    for (int i = 0; i < GRID_WIDTH * GRID_HEIGHT; i++) {
+        if (_grid[i].state == FALLING || _grid[i].state == PLAYER) {
+            _grid[i].state = STATIC;
+        }
+    }
+}
+
 int main() {
 
     dictTrieRoot = createNode();
@@ -391,14 +454,19 @@ int main() {
 
     double tick_time = 1.0;
     double time = GetTime();
+
     while (!WindowShouldClose()) {
+
         // in-game tick
         if (GetTime() >= time + tick_time) {
             time = GetTime();
             if (!movePlayer(0, 1)) {
+                solidify();
+
                 PlaySound(_sfx.move_failure);
-                // scan_game_board();
+
                 spawnPlayer();
+
                 checkForWords(_grid);
             }
         }
@@ -425,6 +493,9 @@ int main() {
                 break;
             case (KEY_J):
                 rotatePlayer(CLOCKW);
+                break;
+            case (KEY_P):
+                printBoard();
                 break;
         };
 
