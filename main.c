@@ -129,8 +129,8 @@ void clear(int *indices, size_t num) {
 
 void setPlayer(int i0, int i1, TileState state, PlayerRotation rotation) {
     printf("setPlayer\n");
-    char l_c = _grid[_player.gridIndices[0]].letter;
-    char r_c = _grid[_player.gridIndices[1]].letter;
+    char l_ch = _grid[_player.gridIndices[0]].letter;
+    char r_ch = _grid[_player.gridIndices[1]].letter;
 
     clear(_player.gridIndices, 2);
 
@@ -140,10 +140,9 @@ void setPlayer(int i0, int i1, TileState state, PlayerRotation rotation) {
 
     _grid[i0].state = state;
     _grid[i1].state = state;
-    _grid[i0].letter = l_c;
-    _grid[i1].letter = r_c;
+    _grid[i0].letter = l_ch;
+    _grid[i1].letter = r_ch;
 }
-
 
 void spawnPlayer() {
     int i0, i1 = *(_player.gridIndices);
@@ -170,12 +169,13 @@ void spawnPlayer() {
     }
 }
 
+// word is viable if it contains and vowel and a consonant
 static bool checkWordViability(char* word) {
     bool contains_vowel = false;
     bool contains_consonant = false;
 
     for (int i = 0; i < strlen(word); i++) {
-        if (word[i] == 'a' | word[i] == 'e' | word[i] == 'i' | word[i] == 'o' | word[i] == 'u') {
+        if (word[i] == 'a' || word[i] == 'e' || word[i] == 'i' || word[i] == 'o' || word[i] == 'u') {
             contains_vowel = true;
         } else {
             contains_consonant = true;
@@ -185,6 +185,7 @@ static bool checkWordViability(char* word) {
     return contains_vowel && contains_consonant;
 }
 
+// check that a substring is the minimum length and contains no spaces.
 static const bool checkSubstringValidity(const char* substring) {
     const int length = strlen(substring);
 
@@ -201,6 +202,7 @@ static const bool checkSubstringValidity(const char* substring) {
     return true;
 }
 
+// check that the tile at index <from_index> can move to the tile at position <to_index>
 static const bool checkCollision(int to_index, int from_index) {
 
     if (_grid[to_index].state == STATIC) {
@@ -242,6 +244,7 @@ static void drawFrame() {
 
 
 
+// check for words in a given row of characters
 static bool checkSubstrings(const char* str, const int* position) {
     int len = strlen(str);
     int maxLen = len < GRID_HEIGHT ? len : GRID_HEIGHT;
@@ -308,37 +311,28 @@ static bool checkForWords(Tile* grid) {
     return found_word;
 }
 
-//void clear(int *indices, size_t num) {
-//    for (int i = 0; i < num; i++) {
-//        _grid[indices[i]].letter =  ' ';
-//        _grid[indices[i]].state =  ' ';
-//    }
-//}
+// update the y-positions of all falling tiles
+void advanceFallingTiles() {
 
-bool moveTile() {
-    bool success = false;
-    for (int i = ((GRID_WIDTH * GRID_HEIGHT) - GRID_WIDTH) - 1; i > -1; i--) {
+    // falling tiles are advanced starting from bottom to top, right to left.
+    int next_to_last_row_end = ((GRID_WIDTH * GRID_HEIGHT) - GRID_WIDTH) - 1;
+    for (int i = next_to_last_row_end; i > -1; i--) {
         if (_grid[i].state == FALLING && _grid[i + GRID_WIDTH].state == EMPTY) {
-            printf("Swapped\n");
 
             _grid[i + GRID_WIDTH] = _grid[i];
             _grid[i].letter = ' ';
             _grid[i].state = EMPTY;
 
-            if (i + GRID_WIDTH > (((GRID_HEIGHT * GRID_WIDTH) - GRID_WIDTH) - 1)) {
+            if (i + GRID_WIDTH > next_to_last_row_end) {
                 _grid[i + GRID_WIDTH].state = STATIC;
             }
         }
-        if (_grid[i].letter == ' ') {
-            _grid[i].state = EMPTY;
-        }
     }
-
-    return success;
 }
 
+// try to move player on x-axis by <dir_x> and on y-axis by <dir_y>
+// return true IFF successful
 bool movePlayer(int dir_x, int dir_y) {
-    bool success = false;
     int i0 = _player.gridIndices[0] + dir_x + (dir_y * GRID_WIDTH);
     int i1 = _player.gridIndices[1] + dir_x + (dir_y * GRID_WIDTH);
 
@@ -346,12 +340,14 @@ bool movePlayer(int dir_x, int dir_y) {
         checkCollision(i1, _player.gridIndices[1])) {
 
         setPlayer(i0, i1, PLAYER, _player.rotation);
-        success = true;
+        return true;
     }
 
-    return success;
+    return false;
 }
 
+// try to rotate the player's tiles either clockwise or counter clockwise
+// return true IFF successful
 bool rotatePlayer(Spin spin) {
     int i0 = _player.gridIndices[0];
     int i1 = _player.gridIndices[1];
@@ -428,7 +424,7 @@ void printBoard() {
     }
 }
 
-void solidify() {
+void setAllStatic() {
     for (int i = 0; i < GRID_WIDTH * GRID_HEIGHT; i++) {
         if (_grid[i].state == FALLING || _grid[i].state == PLAYER) {
             _grid[i].state = STATIC;
@@ -463,7 +459,7 @@ int main() {
         if (GetTime() >= time + tick_time) {
             time = GetTime();
             if (!movePlayer(0, 1)) {
-                solidify();
+                setAllStatic();
 
                 PlaySound(_sfx.move_failure);
 
