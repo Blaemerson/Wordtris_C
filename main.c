@@ -23,16 +23,16 @@ typedef enum GameState {
     PAUSED,
 } GameState;
 
-typedef enum Spin {
-    COUNTER_CLOCKW,
-    CLOCKW,
+enum Spin {
+    CCW,
+    CW,
 } Spin;
 
 typedef enum PlayerRotation {
-    ROT_0,
-    ROT_1,
-    ROT_2,
-    ROT_3,
+    HORI_1,
+    VERT_1,
+    HORI_2,
+    VERT_2,
 } PlayerRotation;
 
 typedef enum TileState {
@@ -59,15 +59,13 @@ typedef struct SoundEffects {
     Sound word_found;
 } SoundEffects;
 
-static GameState _state;
+static GameState _game_state;
 static SoundEffects _sfx;
 static Tile _grid[GRID_WIDTH * GRID_HEIGHT];
 static Player _player;
 static Font _font;
-
-struct TrieNode *dictTrieRoot;
-
-struct LetterPool pool;
+struct TrieNode *_dict_trie_root;
+struct LetterPool _letter_pool;
 
 void initGrid() {
     for (int i = 0; i < GRID_WIDTH * GRID_HEIGHT; i++) {
@@ -83,13 +81,26 @@ void initSounds() {
 }
 
 void initGame() {
-    _state = PLAYING;
+    _game_state = PLAYING;
 
     initGrid();
     _player.gridIndices[0] = 1;
     _player.gridIndices[1] = 1;
 
     initSounds();
+}
+
+void drawBox(int startPosX, int startPosY, int width, int height, int lineThickness, Color borderColor) {
+    DrawLineEx((Vector2){startPosX, startPosY}, (Vector2){startPosX + width, startPosY}, lineThickness, borderColor);
+    DrawLineEx((Vector2){startPosX, startPosY}, (Vector2){startPosX, startPosY + height}, lineThickness, borderColor);
+    DrawLineEx((Vector2){startPosX, startPosY + height}, (Vector2){startPosX + width, startPosY + height}, lineThickness, borderColor);
+    DrawLineEx((Vector2){startPosX + width, startPosY}, (Vector2){startPosX + width, startPosY + height}, lineThickness, borderColor);
+}
+
+void drawBoxFilled(int startPosX, int startPosY, int width, int height, int lineThickness, Color borderColor, Color fillColor) {
+    drawBox(startPosX, startPosY, width, height, lineThickness, borderColor);
+
+    DrawRectangle(startPosX + (lineThickness / 2), startPosY + (lineThickness / 2), width - (lineThickness), height - (lineThickness), fillColor);
 }
 
 void drawGameBoard() {
@@ -100,14 +111,13 @@ void drawGameBoard() {
             const int x_pos = x * TILE_SIZE;
             const int y_pos = y * TILE_SIZE;
 
+
             if (_grid[i].state == EMPTY) {
-                DrawRectangle(x_pos, y_pos, TILE_SIZE, TILE_SIZE, GRAY);
-                DrawRectangle(x_pos + 1, y_pos + 1, TILE_SIZE - 2, TILE_SIZE - 2, WHITE);
+                drawBoxFilled(x_pos, y_pos, TILE_SIZE, TILE_SIZE, 2, GRAY, WHITE);
                 continue;
             }
 
-            DrawRectangle(x_pos, y_pos, TILE_SIZE, TILE_SIZE, BLACK);
-            DrawRectangle(x_pos + 1, y_pos + 1, TILE_SIZE - 2, TILE_SIZE - 2, LIGHTGRAY);
+            drawBox(x_pos, y_pos, TILE_SIZE, TILE_SIZE, 2, GRAY);
 
             Vector2 letter_size = MeasureTextEx(_font, &_grid[i].letter, TILE_SIZE, 0);
 
@@ -120,6 +130,15 @@ void drawGameBoard() {
     }
 }
 
+
+void drawScore() {
+    const int boardEndX = TILE_SIZE * GRID_WIDTH;
+    const int y = 32;
+    drawBoxFilled(boardEndX + 16, y, 256, 32, 4, ORANGE, BLUE);
+
+    DrawText("Score: ", boardEndX + 20, y + 4, 32, BLACK);
+}
+
 void clear(int *indices, size_t num) {
     for (int i = 0; i < num; i++) {
         _grid[indices[i]].letter = ' ';
@@ -128,7 +147,6 @@ void clear(int *indices, size_t num) {
 }
 
 void setPlayer(int i0, int i1, TileState state, PlayerRotation rotation) {
-    printf("setPlayer\n");
     char l_ch = _grid[_player.gridIndices[0]].letter;
     char r_ch = _grid[_player.gridIndices[1]].letter;
 
@@ -145,27 +163,24 @@ void setPlayer(int i0, int i1, TileState state, PlayerRotation rotation) {
 }
 
 void spawnPlayer() {
-    int i0, i1 = *(_player.gridIndices);
-
     int l_idx = (GRID_WIDTH / 2) - 1;
     int r_idx = l_idx + 1;
 
     const bool can_spawn = _grid[l_idx].state == EMPTY && _grid[r_idx].state == EMPTY;
 
     if (can_spawn) {
-        _player.rotation = ROT_0;
+        _player.rotation = HORI_1;
 
         _grid[l_idx].state = PLAYER;
-        _grid[l_idx].letter = getRandomLetter(&pool);
+        _grid[l_idx].letter = getRandomLetter(&_letter_pool);
+        _player.gridIndices[0] = l_idx;
 
         _grid[r_idx].state = PLAYER;
-        _grid[r_idx].letter = getRandomLetter(&pool);
-
-        _player.gridIndices[0] = l_idx;
+        _grid[r_idx].letter = getRandomLetter(&_letter_pool);
         _player.gridIndices[1] = r_idx;
 
     } else {
-        _state = GAMEOVER;
+        _game_state = GAMEOVER;
     }
 }
 
@@ -186,7 +201,7 @@ static bool checkWordViability(char* word) {
 }
 
 // check that a substring is the minimum length and contains no spaces.
-static const bool checkSubstringValidity(const char* substring) {
+static const bool checkStringValidity(const char* substring) {
     const int length = strlen(substring);
 
     if (length < 3) {
@@ -238,6 +253,7 @@ static void drawFrame() {
 
     ClearBackground(RAYWHITE);
     drawGameBoard();
+    drawScore();
 
     EndDrawing();
 }
@@ -255,8 +271,8 @@ static bool checkSubstrings(const char* str, const int* position) {
             strncpy(substr, str + i, subLen);
             substr[subLen] = '\0';
 
-            if (checkWordViability(substr) && checkSubstringValidity(substr)) {
-                if (searchWord(dictTrieRoot, substr)) {
+            if (checkWordViability(substr) && checkStringValidity(substr)) {
+                if (searchWord(_dict_trie_root, substr)) {
                     int indexStart = i;
                     int indexEnd = i + subLen;
 
@@ -348,31 +364,31 @@ bool movePlayer(int dir_x, int dir_y) {
 
 // try to rotate the player's tiles either clockwise or counter clockwise
 // return true IFF successful
-bool rotatePlayer(Spin spin) {
+bool rotatePlayer(enum Spin spin) {
     int i0 = _player.gridIndices[0];
     int i1 = _player.gridIndices[1];
 
     PlayerRotation playerRotaton = _player.rotation;
 
-    if ((playerRotaton == ROT_0 && spin == COUNTER_CLOCKW) || (playerRotaton == ROT_3 && spin == CLOCKW)) {
+    if ((playerRotaton == HORI_1 && spin == CCW) || (playerRotaton == VERT_2 && spin == CW)) {
         i0 += -GRID_WIDTH;
         i1 += -1;
-        playerRotaton = spin == COUNTER_CLOCKW ? ROT_1 : ROT_2;
+        playerRotaton = spin == CCW ? VERT_1 : HORI_2;
     }
-    else if ((playerRotaton == ROT_1 && spin == COUNTER_CLOCKW) || (playerRotaton == ROT_0 && spin == CLOCKW)) {
+    else if ((playerRotaton == VERT_1 && spin == CCW) || (playerRotaton == HORI_1 && spin == CW)) {
         i0 += 1;
         i1 += -GRID_WIDTH;
-        playerRotaton = spin == COUNTER_CLOCKW ? ROT_2 : ROT_3;
+        playerRotaton = spin == CCW ? HORI_2 : VERT_2;
     }
-    else if ((playerRotaton == ROT_2 && spin == COUNTER_CLOCKW) || (playerRotaton == ROT_1 && spin == CLOCKW)) {
+    else if ((playerRotaton == HORI_2 && spin == CCW) || (playerRotaton == VERT_1 && spin == CW)) {
         i0 += GRID_WIDTH;
         i1 += 1;
-        playerRotaton = spin == COUNTER_CLOCKW ? ROT_3 : ROT_0;
+        playerRotaton = spin == CCW ? VERT_2 : HORI_1;
     }
-    else if ((playerRotaton == ROT_3 && spin == COUNTER_CLOCKW) || (playerRotaton == ROT_2 && spin == CLOCKW)) {
+    else if ((playerRotaton == VERT_2 && spin == CCW) || (playerRotaton == HORI_2 && spin == CW)) {
         i0 += -1;
         i1 += GRID_WIDTH;
-        playerRotaton = spin == COUNTER_CLOCKW ? ROT_0 : ROT_1;
+        playerRotaton = spin == CCW ? HORI_1 : VERT_1;
     }
 
     if (checkCollision(i0, _player.gridIndices[0]) && checkCollision(i1, _player.gridIndices[1])) {
@@ -424,7 +440,7 @@ void printBoard() {
     }
 }
 
-void setAllStatic() {
+void setAllToStatic() {
     for (int i = 0; i < GRID_WIDTH * GRID_HEIGHT; i++) {
         if (_grid[i].state == FALLING || _grid[i].state == PLAYER) {
             _grid[i].state = STATIC;
@@ -434,12 +450,12 @@ void setAllStatic() {
 
 int main() {
 
-    dictTrieRoot = createNode();
-    constructTrie(dictTrieRoot, "./dictionary.txt");
+    _dict_trie_root = createNode();
+    constructTrie(_dict_trie_root, "./dictionary.txt");
 
     srand(time(NULL));
-    initializeLetterPool(&pool);
-    populateLetterPool(&pool);
+    initializeLetterPool(&_letter_pool);
+    populateLetterPool(&_letter_pool);
 
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Wordtris");
     InitAudioDevice();
@@ -459,7 +475,7 @@ int main() {
         if (GetTime() >= time + tick_time) {
             time = GetTime();
             if (!movePlayer(0, 1)) {
-                setAllStatic();
+                setAllToStatic();
 
                 PlaySound(_sfx.move_failure);
 
@@ -487,24 +503,24 @@ int main() {
                 }
                 break;
             case (KEY_K):
-                rotatePlayer(COUNTER_CLOCKW);
+                rotatePlayer(CCW);
                 break;
             case (KEY_J):
-                rotatePlayer(CLOCKW);
+                rotatePlayer(CW);
                 break;
             case (KEY_P):
                 printBoard();
                 break;
         };
 
-        if (_state == GAMEOVER) {
+        if (_game_state == GAMEOVER) {
             break;
         }
         drawFrame();
     }
 
-    destroyLetterPool(&pool);
-    destroyTrie(dictTrieRoot);
+    destroyLetterPool(&_letter_pool);
+    destroyTrie(_dict_trie_root);
 
     UnloadFont(_font);
     CloseWindow();
